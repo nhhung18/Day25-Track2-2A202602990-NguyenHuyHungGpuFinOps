@@ -45,3 +45,53 @@ def tokens_per_watt(total_tokens: int, wh: float, seconds: float = 1.0) -> float
     """Energy efficiency of serving: tokens per watt (higher is better)."""
     watts = (wh * 3600.0) / seconds if seconds > 0 else 0.0
     return total_tokens / watts if watts > 0 else 0.0
+
+
+def region_comparison_table(kwh: float) -> list[dict]:
+    """Compare carbon emissions and electricity cost across all 5 monitored regions (Extension 5)."""
+    wh = kwh * 1000.0
+    rows = []
+    for reg, gco2 in REGION_CARBON.items():
+        price = REGION_PRICE_KWH.get(reg, 0.12)
+        carb_kg = (kwh * gco2) / 1000.0
+        elec_usd = kwh * price
+        rows.append({
+            "region": reg,
+            "carbon_intensity_gco2_kwh": gco2,
+            "price_usd_kwh": price,
+            "total_carbon_kg": round(carb_kg, 2),
+            "total_elec_usd": round(elec_usd, 2),
+        })
+    return sorted(rows, key=lambda x: x["total_carbon_kg"])
+
+
+def carbon_aware_workload_savings(
+    total_kwh: float,
+    baseline_region: str = "us-east-1",
+    target_region: str = "europe-north1",
+) -> dict:
+    """Calculate emissions and energy cost reduction from migrating workloads (Extension 5)."""
+    wh = total_kwh * 1000.0
+    base_carb = carbon_g(wh, baseline_region) / 1000.0  # kg
+    target_carb = carbon_g(wh, target_region) / 1000.0  # kg
+    base_cost = energy_cost_usd(wh, baseline_region)
+    target_cost = energy_cost_usd(wh, target_region)
+
+    carbon_saved_kg = base_carb - target_carb
+    carbon_saved_pct = (carbon_saved_kg / base_carb * 100.0) if base_carb > 0 else 0.0
+    cost_saved_usd = base_cost - target_cost
+    cost_saved_pct = (cost_saved_usd / base_cost * 100.0) if base_cost > 0 else 0.0
+
+    return {
+        "baseline_region": baseline_region,
+        "target_region": target_region,
+        "total_kwh": round(total_kwh, 2),
+        "baseline_carbon_kg": round(base_carb, 2),
+        "target_carbon_kg": round(target_carb, 2),
+        "carbon_saved_kg": round(carbon_saved_kg, 2),
+        "carbon_saved_pct": round(carbon_saved_pct, 1),
+        "baseline_energy_cost_usd": round(base_cost, 2),
+        "target_energy_cost_usd": round(target_cost, 2),
+        "cost_saved_usd": round(cost_saved_usd, 2),
+        "cost_saved_pct": round(cost_saved_pct, 1),
+    }

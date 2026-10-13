@@ -61,3 +61,34 @@ def flag_util_lies(rows, util_threshold: float = 0.90, mfu_threshold: float = 0.
 def idle_waste_usd(idle_hours: float, on_demand_hr: float) -> float:
     """Dollars burned by a GPU left running idle (training done, instance up)."""
     return max(0.0, idle_hours) * max(0.0, on_demand_hr)
+
+
+def vram_cost_efficiency(on_demand_hr: float, hbm_gb: float) -> float:
+    """Cost per GB of VRAM ($/GB-hr) — key metric for memory capacity right-sizing (Extension 2)."""
+    if hbm_gb <= 0:
+        return 0.0
+    return on_demand_hr / hbm_gb
+
+
+def bandwidth_cost_efficiency(on_demand_hr: float, peak_bw_tbs: float) -> float:
+    """Cost per TB/s memory bandwidth ($ per TB/s per hour) — key metric for LLM decode (Extension 2)."""
+    if peak_bw_tbs <= 0:
+        return 0.0
+    return on_demand_hr / peak_bw_tbs
+
+
+def mbu_right_size_analysis(catalog: dict) -> dict:
+    """Compare GPU choices by $/GB-VRAM and $/TB/s bandwidth to evaluate right-sizing economics."""
+    analysis = {}
+    for gtype, row in catalog.items():
+        od = float(row.get("on_demand_hr", 0))
+        hbm = float(row.get("hbm_gb", 0))
+        bw = float(row.get("peak_bw_tbs", 0))
+        analysis[gtype] = {
+            "on_demand_hr": od,
+            "hbm_gb": hbm,
+            "peak_bw_tbs": bw,
+            "usd_per_gb_vram": round(vram_cost_efficiency(od, hbm), 4),
+            "usd_per_tb_s_bw": round(bandwidth_cost_efficiency(od, bw), 4),
+        }
+    return analysis

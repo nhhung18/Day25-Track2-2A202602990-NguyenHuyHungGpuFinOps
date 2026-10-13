@@ -46,6 +46,9 @@ def run(verbose: bool = True) -> dict:
         on_demand = num(catalog_by_type()[s["gpu_type"]]["on_demand_hr"])
         idle_waste += metrics.idle_waste_usd(s["idle_hours"], on_demand)
 
+    # Extension 2: MBU Right-sizing analysis for memory-bound workloads
+    mbu_table = metrics.mbu_right_size_analysis(cat)
+
     if verbose:
         print("== M1 Efficiency Audit ==")
         print(f"{'GPU':14}{'type':7}{'util%':>7}{'MFU':>7}{'MBU':>7}{'idle_h':>8}")
@@ -54,7 +57,19 @@ def run(verbose: bool = True) -> dict:
         print(f"\nGPU-Util LIES (util>=90% but MFU<30%): {[l['gpu_id'] for l in lies]}")
         print(f"Idle waste (1 day): ${idle_waste:,.2f}  ->  ${idle_waste*30:,.0f}/month")
 
-    return {"summary": summary, "lies": lies, "idle_waste_daily": round(idle_waste, 2)}
+        print("\n--- Extension 2: Right-sizing theo MBU & VRAM Economics ---")
+        print(f"{'GPU Type':8}{'$/hr':>7}{'VRAM(GB)':>10}{'BW(TB/s)':>10}{'$/GB-hr':>11}{'$/(TB/s-hr)':>13}")
+        for gtype, m in sorted(mbu_table.items(), key=lambda x: x[1]["usd_per_tb_s_bw"]):
+            print(f"{gtype:8}${m['on_demand_hr']:>6.2f}{m['hbm_gb']:>10.0f}{m['peak_bw_tbs']:>10.2f}  ${m['usd_per_gb_vram']:>9.4f}   ${m['usd_per_tb_s_bw']:>10.3f}")
+        print("Key insight: L4 has lowest $/GPU-hr ($0.80) but highest cost per bandwidth ($2.67/(TB/s-hr)).")
+        print("For memory-bound LLM decode, MI300X ($0.37/TB/s) and H100 ($0.75/TB/s) offer superior bandwidth efficiency.")
+
+    return {
+        "summary": summary,
+        "lies": lies,
+        "idle_waste_daily": round(idle_waste, 2),
+        "mbu_table": mbu_table,
+    }
 
 
 if __name__ == "__main__":
